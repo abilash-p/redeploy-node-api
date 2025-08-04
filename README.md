@@ -1,5 +1,5 @@
 # redeploy-node-api
-A simple Python FastAPI server for automatically redeploying Slurm nodes when a newer image is available on MAAS. The API accepts POST requests to /redeploy, where it checks the currently deployed image for a given node, and triggers redeployment with the latest image if available. This implementation assumes a image name of <prefix>-vX.Y.Z, but this logic can be modified for other naming schemes.
+A simple Python FastAPI server for automatically redeploying Slurm nodes when a newer image is available on MAAS. The API accepts POST requests to /redeploy, where it checks the currently deployed image for a given node, and triggers redeployment with the latest image if available. This implementation assumes a image name of <`prefix`>-vX.Y.Z (e.g Noble-Prod-v2.0.0), but this logic can be modified for other naming schemes.
 
 This application expects a .env file with the following values:
 ```
