@@ -16,6 +16,7 @@ MAAS_HOST = os.getenv("MAAS_HOST")
 API_KEY = os.getenv("API_KEY")
 CONSUMER_KEY, CONSUMER_TOKEN, SECRET = API_KEY.split(":")
 API_TOKEN = os.getenv("API_TOKEN") 
+USER_DATA = os.getenv("USER_DATA", "")
 
 MAAS_READY_STATE = "Ready"
 
@@ -76,10 +77,8 @@ async def get_latest_image_version(current_image: str):
         image_name = image.get("name")
         
         if not image.get("name").startswith(prefix):
-            print(f"{image_name} -skipping")
             continue
         try:
-            print(f"{image_name} -parsing")
             version = image_name.replace(prefix, "")
             version = version.lstrip("-v")
             parsed_version = Version(version)
@@ -91,10 +90,11 @@ async def get_latest_image_version(current_image: str):
     
     return latest_image
 
+# Waits for the machine to become ready after a release or deploy operation
+# It checks the machine status every 'interval' seconds until it reaches the 'timeout' limit
 async def wait_for_ready(system_id: str, timeout=100, interval=5):
     elapsed = 0
     while elapsed < timeout:
-        print(f"Checking if machine {system_id} is ready... {elapsed} seconds")
         resp = await maas_client.get(f"{MAAS_HOST}/api/2.0/machines/{system_id}/")
         resp.raise_for_status()
         machine = resp.json()
@@ -104,8 +104,9 @@ async def wait_for_ready(system_id: str, timeout=100, interval=5):
         elapsed += interval
     raise TimeoutError(f"Machine {system_id} did not become ready within {timeout} seconds")
 
+# Releases the machine and redeploys it with the latest image
+# It first releases the machine, waits for it to become ready, and then deploys it
 async def release_and_redeploy(system_id: str, latest_image: str):
-    print(f"Releasing {system_id} with image {latest_image}")
     release = await maas_client.post(
         f"{MAAS_HOST}/api/2.0/machines/{system_id}/op-release",
         data={
@@ -114,13 +115,12 @@ async def release_and_redeploy(system_id: str, latest_image: str):
     )
 
     release.raise_for_status()
-    print(f"Released {system_id}, waiting for it to become ready...")
     await wait_for_ready(system_id)
-    print(f"{system_id} is ready, proceeding with redeploy...")
     dep = await maas_client.post(
         f"{MAAS_HOST}/api/2.0/machines/{system_id}/op-deploy",
         data={
             "distro_series": latest_image,
+            "user_data": USER_DATA,
         }
     )
     dep.raise_for_status()
@@ -135,7 +135,6 @@ async def handle_redeploy(system_id: str):
     logger.info(f"{system_id} is running image: {ossystem}/{current_image}")
 
     latest_image = await get_latest_image_version(current_image)
-    logger.info(f"Latest available image: {latest_image}")
 
     latest_image_full_name = f"{ossystem}/{latest_image}"
 
@@ -169,6 +168,3 @@ async def startup_event():
     )
     maas_client.timeout = httpx.Timeout(30.0, connect=5.0)
     logger.info("MAAS client ready.")
-
-
-
